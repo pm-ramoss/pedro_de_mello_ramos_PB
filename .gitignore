@@ -1,0 +1,22 @@
+# Ambiente Python
+__pycache__/
+*.pyc
+.venv/
+.python-version
+
+# Segredos / variáveis de ambiente
+.env
+.streamlit/secrets.toml
+
+# Dados brutos/gerados localmente (mantemos apenas .gitkeep versionado)
+# Comente as linhas abaixo se quiser versionar os dados de exemplo coletados
+# neste TP2 (Data/Raw e Data/Processed já populados) para fins de avaliação.
+# Data/Raw/*
+# Data/Processed/*
+# !Data/Raw/.gitkeep
+# !Data/Processed/.gitkeep
+
+# Sistema operacional / editor
+.DS_Store
+.vscode/
+.idea/
