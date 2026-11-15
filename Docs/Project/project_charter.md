@@ -1,6 +1,6 @@
 # Project Charter — Conecta Impacto
 
-*(Atualizado no TP2 — seções 8 e 9 revisadas; demais seções herdadas do TP1.)*
+*(Revisado no TP3 — seções 2, 3, 4, 8, 9 e 10 atualizadas e nova seção 11; demais seções herdadas do TP1/TP2.)*
 
 ## 1. Nome do projeto
 **Conecta Impacto** — Plataforma de inteligência de dados para conexão entre projetos
@@ -24,6 +24,26 @@ navegável, informações sobre projetos sociais brasileiros — cruzadas com in
 socioeconômicos regionais — para facilitar a conexão entre esses projetos e
 doadores/voluntários/empresas com agenda ESG?
 
+### 2.1 Reavaliação do problema à luz das novas ferramentas (TP3)
+
+O problema de negócio **permanece o mesmo**, mas as ferramentas do TP3 mudam a forma de
+atacá-lo:
+
+- **FastAPI** transforma a base de projetos em um *serviço*: deixa de ser apenas um CSV
+  lido pelo dashboard e passa a poder ser consultada (`GET`) e **alimentada por terceiros
+  (`POST`)**. Isso ataca diretamente o lado da *oferta* do problema — OSCs podem cadastrar
+  seus próprios projetos — e resolve o risco do TP2 de que os dados enviados se perdiam
+  ao fim da sessão.
+- **Selenium** responde a uma limitação medida no TP2: a página de causas do Observatório
+  rendeu só 7 das 15 causas porque parte do conteúdo depende de JavaScript. Ele é usado de
+  forma **restrita e opcional** (um único script), seguindo a orientação de manter a
+  simplicidade: o restante da coleta continua em BeautifulSoup/`requests`.
+- A **aplicação multipágina** separa as tarefas de cada tipo de usuário (explorar projetos,
+  ver indicadores, cadastrar dados) em vez de concentrá-las em abas de uma só tela.
+
+**Meta ajustada:** além de "catalogar ≥ 100 projetos", passa a ser meta que a base possa
+crescer **sem alterar código**, via API ou upload persistente (ver KPIs, seção 4).
+
 ## 3. Objetivos do projeto
 
 ### Objetivo de negócio
@@ -31,26 +51,30 @@ Aumentar a visibilidade de projetos sociais brasileiros e facilitar decisões de
 voluntariado e investimento social por parte de pessoas físicas e empresas.
 
 ### Objetivo do projeto de dados
-Construir um dashboard interativo (Streamlit) que integre dados coletados via
-Web Scraping e APIs públicas, organizados e classificados por causa/ODS, com uma
-camada de conteúdo contextual (notícias) e um canal para que os próprios usuários
-complementem a base (upload de CSV). Em etapas futuras, usar LLMs para classificar,
-resumir e recomendar projetos automaticamente.
+Construir uma aplicação interativa (Streamlit, multipágina) apoiada em uma **API própria
+(FastAPI)**, que integre dados coletados via Web Scraping (estático e dinâmico) e APIs
+públicas, organizados e classificados por causa/ODS, com uma camada de conteúdo contextual
+(notícias) e um canal persistente para que os próprios usuários complementem a base
+(cadastro/upload via `POST /projetos`). Na próxima etapa (TP4), usar LLMs para classificar,
+resumir e recomendar projetos automaticamente — os dados e os prompts-base já ficam
+preparados no TP3.
 
 ## 4. Metas e indicadores de sucesso (KPIs)
 
-| Indicador | Meta (fim do projeto) | Status no TP2 |
+| Indicador | Meta (fim do projeto) | Status no TP3 |
 |---|---|---|
-| Nº de projetos sociais catalogados na base | ≥ 100 projetos | 10 (amostra curada) + upload do usuário |
-| Nº de ODS cobertos pela base de projetos | ≥ 8 dos 17 ODS | 8 ODS cobertos na amostra |
-| Cobertura geográfica (UFs representadas) | ≥ 10 estados | 9 UFs na amostra |
-| Fontes de dados integradas (API + scraping) | ≥ 3 fontes distintas | 3 (IBGE, Observatório do Terceiro Setor, notícias ESG diversas) |
-| Disponibilidade da aplicação demo | App Streamlit funcional, pronto para deploy | Concluído (cache, sessão, upload/download) |
-| Qualidade dos dados (registros sem valores essenciais faltantes) | ≥ 90% dos registros completos | 100% na amostra curada |
+| Nº de projetos sociais catalogados na base | ≥ 100 projetos | 10 (base curada) + cadastros via API/upload (persistentes) |
+| Nº de ODS cobertos pela base de projetos | ≥ 8 dos 17 ODS | **12 ODS** cobertos (meta atingida) |
+| Cobertura geográfica (UFs representadas) | ≥ 10 estados | 9 UFs |
+| Fontes de dados integradas (API + scraping) | ≥ 3 fontes distintas | 3 fontes externas + API própria do projeto |
+| Disponibilidade da aplicação | App Streamlit funcional, pronto para deploy | Concluído: 7 páginas com menu de navegação; modo contingência sem API |
+| Qualidade dos dados (registros sem valores essenciais faltantes) | ≥ 90% dos registros completos | 100% na base curada; `POST /projetos` valida UF, link e tamanhos |
+| **(novo)** Endpoints da API documentados e testados | ≥ 2 rotas (GET e POST) | 7 rotas (6 GET + 1 POST), documentação em `/docs` e em `Docs/API/` |
+| **(novo)** Corpus preparado para LLMs | Documentos texto + metadados | 15 documentos (10 projetos + 5 notícias) em `corpus_llm.jsonl` |
 
-> A expansão para ≥ 100 projetos catalogados depende da execução periódica dos
-> scripts de scraping em produção (etapa prevista para o TP3, com agendamento e
-> persistência em banco de dados).
+> A expansão para ≥ 100 projetos catalogados depende de coleta em escala (scraping
+> agendado) e do uso da API de cadastro por OSCs. O TP3 entrega a infraestrutura para
+> isso (API + persistência em CSV); agendamento e banco de dados permanecem como evolução.
 
 ## 5. ODS (Agenda 2030) atendido(s)
 
@@ -87,7 +111,7 @@ solução também instrumentaliza decisões que favorecem o ODS 10.
 | Beneficiários indiretos | OSCs/ONGs catalogadas na plataforma |
 | Fontes de dados | IBGE, Observatório do Terceiro Setor, Conecta Brasil, portais de notícias ESG/ODS |
 
-## 8. Escopo (atualizado no TP2)
+## 8. Escopo (atualizado no TP3)
 
 ### Concluído no TP1
 - Definição do problema, metas, ODS e público-alvo.
@@ -110,12 +134,29 @@ solução também instrumentaliza decisões que favorecem o ODS 10.
   base de projetos sociais.
 - Finalização do Project Charter e do Data Summary Report.
 
-### Fora do escopo (previsto para o TP3)
-- Classificação automática de projetos por ODS via LLM.
+### Concluído no TP3
+- **Aplicação multipágina** em Streamlit (`st.navigation`), com 7 páginas: Visão Geral,
+  Projetos, Estatísticas e Gráficos, Notícias, Meus Dados, Console da API e Preparação
+  para LLMs (`app.py` + `app_pages/`).
+- **API FastAPI** (`Code/API/`) com 7 rotas — consulta (`GET /projetos`, `/projetos/{id}`,
+  `/noticias`, `/estatisticas`, `/llm/documentos`, `/saude`) e envio de dados
+  (`POST /projetos`) — documentada em `Docs/API/api_documentacao.md` e em `/docs`.
+- **Persistência** dos dados enviados (`Data/Processed/projetos_enviados.csv`), mitigando
+  o risco aberto no TP2.
+- **Integração app ↔ API** com contingência: se a API estiver fora do ar, o app lê os
+  mesmos arquivos (útil para deploy no Streamlit Community Cloud).
+- **Scraping dinâmico** com Selenium (`scraping_dinamico_selenium.py`), restrito ao caso
+  que o BeautifulSoup não resolve (lista de causas carregada via JavaScript).
+- **Preparação para LLMs:** corpus JSONL (`preparar_corpus_llm.py`), endpoint
+  `/llm/documentos`, prompts-base por caso de uso (`Code/Modeling/prompts_llm.py`) e
+  documento `Docs/Project/preparacao_llm.md`.
+- Revisão do Project Charter e do Data Summary Report.
+
+### Fora do escopo (previsto para o TP4 e seguintes)
+- Execução de LLMs: classificação por ODS, resumos, sentimento, Q&A e geração de texto.
 - Motor de recomendação/matching doador↔projeto.
-- Coleta em produção (agendada/automatizada) e persistência em banco de dados
-  (os dados enviados via upload hoje vivem apenas na sessão do usuário).
-- Autenticação de usuários e funcionalidades transacionais (doação online, etc.).
+- Coleta agendada em produção e banco de dados relacional (hoje: arquivos CSV).
+- Autenticação de usuários na API e funcionalidades transacionais (doação online, etc.).
 
 ## 9. Cronograma de alto nível (fases TDSP)
 
@@ -124,9 +165,10 @@ solução também instrumentaliza decisões que favorecem o ODS 10.
 | Business Understanding | Project Charter | TP1 | Concluído |
 | Data Acquisition & Understanding | Data Summary Report + scripts de coleta | TP1 (esboço) / TP2 | **Concluído no TP2** |
 | Data Preparation | Limpeza/consolidação de projetos e notícias | TP2 | **Concluído no TP2** |
-| Modeling | Classificação por ODS, matching | TP3 | Planejado |
-| Deployment | Dashboard Streamlit completo em produção | TP2 (preparação) / TP3 (deploy efetivo) | Em andamento |
-| Customer Acceptance | Validação final e entrega | TP3 | Planejado |
+| Data Acquisition & Understanding (revisão) | Novas fontes: scraping dinâmico, API própria, corpus LLM | TP3 | **Concluído no TP3** |
+| Deployment (parcial) | App multipágina + API FastAPI | TP3 | **Concluído no TP3** (deploy público em andamento) |
+| Modeling | Classificação por ODS, resumos, sentimento, Q&A via LLM; matching | TP4 | Planejado (dados e prompts preparados no TP3) |
+| Customer Acceptance | Validação final e entrega | TP4 | Planejado |
 
 ## 10. Riscos e premissas
 
@@ -135,8 +177,18 @@ solução também instrumentaliza decisões que favorecem o ODS 10.
   manter listas de contingência (`CAUSAS_FALLBACK`) para não quebrar o pipeline.
 - **Risco:** dados incompletos ou desatualizados nas fontes públicas → mitigação: cruzar
   múltiplas fontes e documentar limitações no Data Summary Report.
-- **Risco (novo no TP2):** dados enviados pelo usuário via upload não persistem entre
-  sessões (armazenados apenas em `st.session_state`) → mitigação planejada para o TP3:
-  persistência em banco de dados ou arquivo compartilhado.
+- **Risco (TP2) — mitigado no TP3:** dados enviados pelo usuário não persistiam entre
+  sessões → agora `POST /projetos` grava em `Data/Processed/projetos_enviados.csv`.
+  *Risco residual:* em hospedagens de disco efêmero (ex.: Streamlit Community Cloud) o
+  arquivo pode ser perdido em reinícios → solução definitiva é um banco de dados (TP4+).
+- **Risco (novo no TP3):** a API não tem autenticação, então qualquer cliente pode
+  cadastrar projetos → mitigação: validação de campos (UF, link, tamanhos), bloqueio de
+  duplicados (409) e uso restrito a ambiente local/acadêmico; autenticação fica como
+  evolução.
+- **Risco (novo no TP3):** o scraping com Selenium depende de Chrome instalado e da
+  estrutura da página → mitigação: o script é opcional, falha sem alterar dados
+  existentes, e reaproveita o parser testado do TP2.
+- **Risco (novo no TP3):** a base tem só 10 projetos, o que limita a qualidade de testes
+  com LLM no TP4 → mitigação: ampliar a base via scraping/API antes da modelagem.
 - **Premissa:** as fontes de dados usadas (IBGE, Observatório do Terceiro Setor, portais
   de notícias) permanecem publicamente acessíveis durante o desenvolvimento do projeto.

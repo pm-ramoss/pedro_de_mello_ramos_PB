@@ -21,10 +21,10 @@ que por sua vez determina onde os artefatos ficam versionados neste repositório
 | Business Understanding | 1. Business Understanding | Project Charter | `Docs/Project/project_charter.md` |
 | Data Understanding | 2. Data Acquisition & Understanding | Data Summary Report, Data Quality Report | `Docs/DataReport/data_summary_report.md` |
 | Data Preparation | 2. Data Acquisition & Understanding | Scripts de ETL/limpeza | `Code/DataAcquisition/`, `Code/DataPreparation/` |
-| Modeling | 3. Modeling | Feature sets, Model Report | `Code/Modeling/` (próxima etapa) |
-| Evaluation | 3. Modeling | Model Performance Report | `Code/Modeling/` (próxima etapa) |
-| Deployment | 4. Deployment | Dashboard/app implantado | `app.py` (Streamlit) |
-| — | 5. Customer Acceptance | Exit Report | Entrega final do projeto (TP3) |
+| Modeling | 3. Modeling | Feature sets, Model Report | `Code/Modeling/` (TP3: prompts-base em `prompts_llm.py`; modelagem com LLM no TP4) |
+| Evaluation | 3. Modeling | Model Performance Report | `Code/Modeling/` (TP4) |
+| Deployment | 4. Deployment | App + API implantáveis | `app.py` + `app_pages/` (Streamlit multipágina), `Code/API/` (FastAPI) |
+| — | 5. Customer Acceptance | Exit Report | Entrega final do projeto (TP4) |
 
 ## 3. Papéis TDSP aplicados ao projeto (trabalho individual/acadêmico)
 
@@ -37,11 +37,13 @@ seguem sendo observadas nos artefatos correspondentes:
 - **Data Scientist:** responsável pela coleta (`Code/DataAcquisition`), preparação
   (`Code/DataPreparation`), modelagem (`Code/Modeling`) e pelo Data Summary Report.
 
-## 4. Estado atual do ciclo de vida (TP1)
+## 4. Estado atual do ciclo de vida (TP3)
 
-- ✅ Business Understanding — concluído (Project Charter).
-- 🟡 Data Acquisition & Understanding — em andamento (scripts prontos, execução completa
-  e Data Summary Report definitivo previstos para o TP2).
-- ⬜ Modeling — não iniciado.
-- 🟡 Deployment — aplicação demo inicial em Streamlit já disponível (`app.py`).
-- ⬜ Customer Acceptance — não iniciado.
+- ✅ Business Understanding — Project Charter revisado no TP3 (problema reavaliado com
+  FastAPI/Selenium).
+- ✅ Data Acquisition & Understanding — scraping estático e dinâmico, API própria e
+  corpus para LLMs; Data Summary Report revisado.
+- 🟡 Modeling — preparado: casos de uso e prompts-base definidos; execução com LLM no TP4.
+- 🟡 Deployment — app multipágina + API FastAPI funcionando localmente; deploy público
+  em andamento.
+- ⬜ Customer Acceptance — não iniciado (TP4).

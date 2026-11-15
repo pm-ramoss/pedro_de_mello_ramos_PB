@@ -16,6 +16,9 @@ __pycache__/
 # !Data/Raw/.gitkeep
 # !Data/Processed/.gitkeep
 
+# Projetos cadastrados via API/upload (dados de execução; remova esta linha para versionar)
+Data/Processed/projetos_enviados.csv
+
 # Sistema operacional / editor
 .DS_Store
 .vscode/

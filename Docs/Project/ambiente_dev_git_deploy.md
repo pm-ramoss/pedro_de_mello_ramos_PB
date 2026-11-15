@@ -96,3 +96,77 @@ Data/Processed/
 ├── projetos_sociais.csv          (novo — TP2, gerado por preparar_dados.py)
 └── noticias_processadas.csv      (novo — TP2, gerado por preparar_dados.py)
 ```
+
+## 6. Ambiente, execução e deploy no TP3
+
+### 6.1 Dependências novas
+
+`requirements.txt` ganhou `fastapi`, `uvicorn` (servidor da API) e `selenium` (scraping
+dinâmico, opcional). Após atualizar o repositório:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 6.2 Executando API e aplicação (dois terminais, na raiz do projeto)
+
+```bash
+# Terminal 1 — API (http://localhost:8000, Swagger em /docs)
+uvicorn main:app --reload --app-dir Code/API --port 8000
+
+# Terminal 2 — aplicação Streamlit (http://localhost:8501)
+streamlit run app.py
+```
+
+Para apontar o app para outro endereço de API: `export CONECTA_API_URL=http://host:porta`
+(Windows PowerShell: `$env:CONECTA_API_URL="http://host:porta"`).
+
+A API é **opcional para o app**: sem ela, o app lê os mesmos CSVs de `Data/Processed/`
+(a barra lateral indica qual modo está ativo).
+
+### 6.3 Scripts auxiliares
+
+```bash
+python Code/DataPreparation/preparar_corpus_llm.py          # gera Data/Processed/corpus_llm.jsonl
+python Code/DataAcquisition/scraping_dinamico_selenium.py   # opcional: requer Selenium + Chrome
+```
+
+### 6.4 Git — sugestão de commits do TP3
+
+```bash
+git checkout -b tp3-api-multipagina
+git add Code/API app_utils.py
+git commit -m "Deployment: API FastAPI (GET/POST) com camada de dados compartilhada"
+git add app.py app_pages
+git commit -m "Deployment: app Streamlit multipágina com st.navigation e contingência sem API"
+git add Code/DataAcquisition Code/DataPreparation Code/Modeling Data/Processed/corpus_llm.jsonl
+git commit -m "Data Acquisition/Modeling: scraping dinâmico (Selenium) e preparação para LLMs"
+git add Docs README.md requirements.txt .gitignore
+git commit -m "Docs: revisão do Project Charter e do Data Summary Report (TP3)"
+git checkout main && git merge tp3-api-multipagina
+```
+
+### 6.5 Deploy
+
+- **Streamlit Community Cloud** executa apenas o `app.py`; a API não sobe junto. Nesse
+  cenário o app cai automaticamente no modo "arquivos locais". Como o disco é efêmero,
+  cadastros feitos lá podem ser perdidos em reinícios.
+- Para publicar a API, use um serviço que execute processos (Render, Railway, Fly.io etc.)
+  com o comando `uvicorn main:app --app-dir Code/API --host 0.0.0.0 --port $PORT` e
+  defina `CONECTA_API_URL` nos *Secrets*/variáveis do app Streamlit.
+
+### 6.6 Estrutura de diretórios — acréscimos do TP3
+
+```
+app.py                              (reescrito — ponto de entrada e menu de navegação)
+app_utils.py                        (novo — cliente da API + contingência)
+app_pages/                          (novo — 7 páginas)
+Code/API/                           (novo — main.py, schemas.py, repositorio.py)
+Code/DataAcquisition/scraping_dinamico_selenium.py   (novo)
+Code/DataPreparation/preparar_corpus_llm.py          (novo)
+Code/Modeling/prompts_llm.py                         (novo)
+Data/Processed/corpus_llm.jsonl                      (novo)
+Data/Processed/projetos_enviados.csv                 (criado no primeiro POST; ignorado pelo Git)
+Docs/API/api_documentacao.md                         (novo)
+Docs/Project/preparacao_llm.md                       (novo)
+```
