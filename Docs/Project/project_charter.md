@@ -1,6 +1,6 @@
 # Project Charter — Conecta Impacto
 
-*(Revisado no TP3 — seções 2, 3, 4, 8, 9 e 10 atualizadas e nova seção 11; demais seções herdadas do TP1/TP2.)*
+*(Revisado no TP4 — seções 4, 8, 9 e 10 atualizadas com a integração de LLM local; seções 2 e 3 revisadas no TP3.)*
 
 ## 1. Nome do projeto
 **Conecta Impacto** — Plataforma de inteligência de dados para conexão entre projetos
@@ -71,6 +71,8 @@ preparados no TP3.
 | Qualidade dos dados (registros sem valores essenciais faltantes) | ≥ 90% dos registros completos | 100% na base curada; `POST /projetos` valida UF, link e tamanhos |
 | **(novo)** Endpoints da API documentados e testados | ≥ 2 rotas (GET e POST) | 7 rotas (6 GET + 1 POST), documentação em `/docs` e em `Docs/API/` |
 | **(novo)** Corpus preparado para LLMs | Documentos texto + metadados | 15 documentos (10 projetos + 5 notícias) em `corpus_llm.jsonl` |
+| **(novo — TP4)** Integração com LLM local | ≥ 1 tarefa de PLN via FastAPI, sem nuvem | 2 tarefas (resumo e sentimento) em `POST /processar_texto`; modelos justificados em `Docs/Project/escolha_modelo_llm.md` |
+| **(novo — TP4)** Robustez da API | Erros HTTP específicos e respostas validadas | 422/500/503/504 padronizados + Response Models; 12 testes automatizados do serviço |
 
 > A expansão para ≥ 100 projetos catalogados depende de coleta em escala (scraping
 > agendado) e do uso da API de cadastro por OSCs. O TP3 entrega a infraestrutura para
@@ -152,8 +154,18 @@ solução também instrumentaliza decisões que favorecem o ODS 10.
   documento `Docs/Project/preparacao_llm.md`.
 - Revisão do Project Charter e do Data Summary Report.
 
-### Fora do escopo (previsto para o TP4 e seguintes)
-- Execução de LLMs: classificação por ODS, resumos, sentimento, Q&A e geração de texto.
+### Concluído no TP4
+- **LLM local (HuggingFace):** resumo (`recogna-nlp/ptt5-base-summ`) e sentimento
+  (`lxyuan/distilbert-base-multilingual-cased-sentiments-student`), carregados sob demanda
+  por `Code/API/llm_service.py` e expostos em `POST /processar_texto` e `GET /llm/status`.
+- **Response Models** com tipo discriminado por tarefa e **tratamento de erros** com
+  exceções específicas (422, 500, 503, 504) em formato padronizado.
+- Página **🧠 Análise de Texto** no app (texto livre e sentimento em lote das notícias).
+- Justificativa da escolha dos modelos, custo local e testes: `Docs/Project/escolha_modelo_llm.md`.
+
+### Fora do escopo (previsto para a entrega final)
+- Classificação automática de projetos por ODS e Q&A sobre os projetos com LLM (prompts já preparados no TP3).
+- Avaliação quantitativa dos modelos com dados rotulados.
 - Motor de recomendação/matching doador↔projeto.
 - Coleta agendada em produção e banco de dados relacional (hoje: arquivos CSV).
 - Autenticação de usuários na API e funcionalidades transacionais (doação online, etc.).
@@ -167,8 +179,9 @@ solução também instrumentaliza decisões que favorecem o ODS 10.
 | Data Preparation | Limpeza/consolidação de projetos e notícias | TP2 | **Concluído no TP2** |
 | Data Acquisition & Understanding (revisão) | Novas fontes: scraping dinâmico, API própria, corpus LLM | TP3 | **Concluído no TP3** |
 | Deployment (parcial) | App multipágina + API FastAPI | TP3 | **Concluído no TP3** (deploy público em andamento) |
-| Modeling | Classificação por ODS, resumos, sentimento, Q&A via LLM; matching | TP4 | Planejado (dados e prompts preparados no TP3) |
-| Customer Acceptance | Validação final e entrega | TP4 | Planejado |
+| Modeling | Resumo e sentimento com LLM local via API | TP4 | **Concluído no TP4** (avaliação com dados rotulados pendente) |
+| Modeling (cont.) | Classificação por ODS, Q&A, matching | Entrega final | Planejado |
+| Customer Acceptance | Validação final e apresentação | Entrega final | Planejado |
 
 ## 10. Riscos e premissas
 
@@ -188,6 +201,8 @@ solução também instrumentaliza decisões que favorecem o ODS 10.
 - **Risco (novo no TP3):** o scraping com Selenium depende de Chrome instalado e da
   estrutura da página → mitigação: o script é opcional, falha sem alterar dados
   existentes, e reaproveita o parser testado do TP2.
+- **Risco (novo no TP4):** o modelo local pode falhar ao carregar (falta de RAM/disco, sem internet no primeiro download) → mitigação: erro 503 explicativo, `GET /llm/status`, modo offline após `baixar_modelos.py` e app que continua funcionando sem o LLM.
+- **Risco (novo no TP4):** qualidade limitada de modelos pequenos (resumos podem omitir fatos; sentimento de notícias tende ao neutro) → mitigação: a API devolve texto de entrada e pontuações para conferência; avaliação com dados rotulados na etapa final.
 - **Risco (novo no TP3):** a base tem só 10 projetos, o que limita a qualidade de testes
   com LLM no TP4 → mitigação: ampliar a base via scraping/API antes da modelagem.
 - **Premissa:** as fontes de dados usadas (IBGE, Observatório do Terceiro Setor, portais

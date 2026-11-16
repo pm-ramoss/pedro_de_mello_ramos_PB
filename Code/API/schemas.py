@@ -97,3 +97,71 @@ class DocumentoLLM(BaseModel):
     texto: str
     metadados: dict[str, str]
     tokens_estimados: int
+
+
+# --------------------------------------------------------------------------
+# TP4 — processamento de texto com LLM local
+# --------------------------------------------------------------------------
+from typing import Annotated, Literal, Union  # noqa: E402
+
+
+class ProcessarTextoIn(BaseModel):
+    """Corpo do POST /processar_texto."""
+
+    model_config = ConfigDict(
+        str_strip_whitespace=True,
+        json_schema_extra={
+            "example": {
+                "tarefa": "sentimento",
+                "texto": "O projeto ampliou o acesso à educação e foi muito elogiado pela comunidade.",
+            }
+        },
+    )
+
+    tarefa: Literal["resumo", "sentimento"] = Field(description="Tipo de análise a executar")
+    texto: str = Field(min_length=1, max_length=20_000, description="Texto em português")
+    max_palavras_resumo: int = Field(
+        default=60, ge=15, le=200, description="Tamanho máximo aproximado do resumo (só para tarefa=resumo)"
+    )
+
+
+class ResultadoResumo(BaseModel):
+    tarefa: Literal["resumo"] = "resumo"
+    resumo: str
+    n_palavras_resumo: int
+    taxa_compressao: float = Field(description="palavras do resumo ÷ palavras do texto (0–1)")
+
+
+class ResultadoSentimento(BaseModel):
+    tarefa: Literal["sentimento"] = "sentimento"
+    rotulo: Literal["positivo", "neutro", "negativo"]
+    confianca: float = Field(ge=0, le=1)
+    pontuacoes: dict[str, float] = Field(description="Probabilidade de cada rótulo")
+
+
+class ProcessarTextoOut(BaseModel):
+    tarefa: Literal["resumo", "sentimento"]
+    modelo: str = Field(description="Id do modelo HuggingFace usado")
+    texto_entrada: str
+    n_caracteres_entrada: int
+    tempo_ms: int
+    resultado: Annotated[Union[ResultadoResumo, ResultadoSentimento], Field(discriminator="tarefa")]
+
+
+class ErroResposta(BaseModel):
+    """Formato padrão dos erros do serviço de LLM."""
+
+    codigo: str = Field(description="Identificador estável do erro, ex.: modelo_indisponivel")
+    mensagem: str = Field(description="Explicação legível do que aconteceu")
+    dica: str = Field(description="O que o usuário/desenvolvedor pode fazer")
+
+
+class StatusModelo(BaseModel):
+    modelo: str
+    carregado: bool
+    ultimo_erro: str | None = None
+
+
+class StatusLLM(BaseModel):
+    resumo: StatusModelo
+    sentimento: StatusModelo

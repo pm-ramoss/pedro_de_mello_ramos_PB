@@ -52,7 +52,8 @@ def status_api() -> dict | None:
 
 def chamar_api(metodo: str, caminho: str, **kwargs) -> requests.Response:
     """Chamada genérica (usada também pelo console de testes da página API)."""
-    return requests.request(metodo, f"{API_URL}{caminho}", timeout=TIMEOUT_S, **kwargs)
+    kwargs.setdefault("timeout", TIMEOUT_S)
+    return requests.request(metodo, f"{API_URL}{caminho}", **kwargs)
 
 
 def _api_ativa() -> bool:
@@ -151,6 +152,57 @@ def enviar_projeto(registro: dict) -> tuple[bool, str]:
     except ValidationError as exc:
         erros = "; ".join(f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}" for e in exc.errors())
         return False, f"Dados inválidos — {erros}"
+
+
+# --------------------------------------------------------------------------
+# LLM local (via API) — TP4
+# --------------------------------------------------------------------------
+TIMEOUT_LLM_S = 120  # a primeira chamada carrega o modelo em memória
+
+
+def processar_texto(tarefa: str, texto: str, max_palavras_resumo: int = 60) -> tuple[bool, dict | str]:
+    """Chama POST /processar_texto. Retorna (True, resposta_json) ou (False, mensagem_de_erro)."""
+    if not _api_ativa():
+        return False, (
+            "A API está fora do ar. Inicie-a com: "
+            "`uvicorn main:app --reload --app-dir Code/API --port 8000`."
+        )
+    try:
+        r = chamar_api(
+            "POST", "/processar_texto",
+            json={"tarefa": tarefa, "texto": texto, "max_palavras_resumo": max_palavras_resumo},
+            timeout=TIMEOUT_LLM_S,
+        )
+    except requests.Timeout:
+        return False, "A API demorou demais para responder (o modelo pode estar sendo carregado). Tente de novo."
+    except requests.RequestException as exc:
+        return False, f"Não foi possível falar com a API: {exc}"
+
+    if r.status_code == 200:
+        return True, r.json()
+    try:
+        corpo = r.json()
+    except ValueError:
+        return False, f"A API respondeu {r.status_code}."
+    if "codigo" in corpo:  # erro padronizado do serviço de LLM
+        return False, f"{corpo['mensagem']} — {corpo['dica']}"
+    if isinstance(corpo.get("detail"), list):  # validação do FastAPI (422)
+        return False, "Dados inválidos — " + "; ".join(
+            f"{'.'.join(str(x) for x in e['loc'][1:])}: {e['msg']}" for e in corpo["detail"]
+        )
+    return False, f"A API respondeu {r.status_code}: {corpo.get('detail', corpo)}"
+
+
+def status_llm() -> dict | None:
+    """GET /llm/status ou None se a API estiver fora do ar."""
+    if not _api_ativa():
+        return None
+    try:
+        r = chamar_api("GET", "/llm/status")
+        r.raise_for_status()
+        return r.json()
+    except (requests.RequestException, ValueError):
+        return None
 
 
 # --------------------------------------------------------------------------

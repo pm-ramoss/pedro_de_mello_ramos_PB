@@ -1,4 +1,8 @@
-# Preparação para IA com LLMs — Conecta Impacto (TP3)
+# Preparação para IA com LLMs — Conecta Impacto (TP3; implementação parcial no TP4)
+
+> **Atualização TP4:** os casos de uso **resumo** e **sentimento** já foram implementados
+> com modelos locais (ver `Docs/Project/escolha_modelo_llm.md`). **Q&A**, **geração de
+> texto** e **classificação por ODS** seguem planejados para a entrega final.
 
 Este documento descreve **quais dados o projeto já tem**, **como eles poderão alimentar
 LLMs** na próxima etapa e **o que foi preparado no TP3**. Nenhum LLM é chamado nesta

@@ -1,6 +1,8 @@
 # Conecta Impacto — Plataforma de Inteligência para Conexão entre Doadores/Voluntários e Projetos Sociais (ESG + Agenda 2030)
 
-**TP3 — Aplicação multipágina, API com FastAPI, scraping dinâmico e preparação para LLMs**
+**TP4 — LLM local (HuggingFace) integrado ao FastAPI, Response Models e tratamento de erros**
+
+*(O TP3 — app multipágina, API, scraping dinâmico e preparação de dados — continua descrito abaixo.)*
 
 ## 1. Visão geral
 
@@ -17,7 +19,8 @@ O projeto segue o **TDSP** (Microsoft) com o **CRISP-DM** como referencial metod
 |---|---|
 | TP1 | Proposta, planejamento e demo estática em Streamlit |
 | TP2 | Interface em abas, scraping (BeautifulSoup), cache/sessão, upload/download |
-| **TP3** | **App multipágina, API FastAPI (GET/POST), scraping dinâmico (Selenium) e dados preparados para LLMs** |
+| TP3 | App multipágina, API FastAPI (GET/POST), scraping dinâmico (Selenium) e dados preparados para LLMs |
+| **TP4** | **LLM local (HuggingFace): resumo e sentimento via `POST /processar_texto`, Response Models, erros HTTP e página 🧠 no app** |
 
 ## 2. Estrutura de diretórios (TDSP)
 
@@ -31,15 +34,18 @@ O projeto segue o **TDSP** (Microsoft) com o **CRISP-DM** como referencial metod
 │   ├── estatisticas.py
 │   ├── noticias.py
 │   ├── meus_dados.py
+│   ├── analise_texto.py                # novo — TP4
 │   ├── api_console.py
 │   └── preparacao_llm.py
+├── tests/                              # testes automatizados (TP4)
 ├── requirements.txt
 ├── .streamlit/config.toml
 ├── Code/
 │   ├── API/                            # API FastAPI (TP3)
 │   │   ├── main.py                     # rotas
 │   │   ├── schemas.py                  # validação (Pydantic)
-│   │   └── repositorio.py              # leitura/escrita dos CSVs
+│   │   ├── repositorio.py              # leitura/escrita dos CSVs
+│   │   └── llm_service.py              # LLM local (HuggingFace) — TP4
 │   ├── DataAcquisition/
 │   │   ├── coleta_ibge.py
 │   │   ├── scraping_observatorio.py
@@ -51,13 +57,14 @@ O projeto segue o **TDSP** (Microsoft) com o **CRISP-DM** como referencial metod
 │   │   ├── gerar_nuvem_palavras.py
 │   │   └── preparar_corpus_llm.py          # novo — TP3
 │   └── Modeling/
-│       └── prompts_llm.py                  # novo — TP3 (prompts-base para o TP4)
+│       ├── prompts_llm.py                  # prompts-base (TP3)
+│       └── baixar_modelos.py               # download dos modelos HF — TP4
 ├── Data/
 │   ├── Raw/                            # Dados brutos coletados
 │   └── Processed/                      # CSVs tratados + corpus_llm.jsonl (TP3)
 ├── SampleData/projetos_sociais_sample.csv
 └── Docs/
-    ├── Project/    (project_charter, tdsp_crispdm_mapping, ambiente_dev_git_deploy, preparacao_llm)
+    ├── Project/    (project_charter, tdsp_crispdm_mapping, ambiente_dev_git_deploy, preparacao_llm, escolha_modelo_llm)
     ├── DataReport/ (data_summary_report)
     └── API/        (api_documentacao)
 ```
@@ -72,6 +79,17 @@ pip install -r requirements.txt
 
 (Alternativa com `pyenv`/`virtualenv`: ver `Docs/Project/ambiente_dev_git_deploy.md`.)
 
+### PyTorch (versão CPU, mais leve)
+
+Se não tiver GPU, instale o PyTorch de CPU antes do `requirements.txt` para economizar
+espaço: `pip install torch --index-url https://download.pytorch.org/whl/cpu`.
+
+### Modelos do TP4 (download único)
+
+```bash
+python Code/Modeling/baixar_modelos.py      # precisa de internet; ~2 GB
+```
+
 ## 4. Como rodar
 
 Use **dois terminais**, na raiz do projeto:
@@ -85,7 +103,8 @@ streamlit run app.py
 ```
 
 A API é opcional para o app: se ela estiver fora do ar, o app lê os mesmos CSVs e a barra
-lateral indica "API offline". Para usar outro endereço: `CONECTA_API_URL=http://host:porta`.
+lateral indica "API offline" (exceto a página 🧠, que exige a API). Para usar outro endereço: `CONECTA_API_URL=http://host:porta`.
+Para rodar o LLM sem internet depois do download: `CONECTA_LLM_OFFLINE=1 uvicorn main:app --reload --app-dir Code/API --port 8000`.
 
 ### Páginas do app (menu lateral)
 
@@ -96,6 +115,7 @@ lateral indica "API offline". Para usar outro endereço: `CONECTA_API_URL=http:/
 | 📊 Estatísticas e Gráficos | Gráficos por causa/UF/ODS e progresso das metas do Charter |
 | 📰 Notícias e Nuvem de Palavras | Notícias filtráveis, nuvem de palavras e estatísticas do corpus |
 | 📤 Meus Dados | Cadastro de projeto e upload de CSV (persistentes via `POST /projetos`); download CSV/JSON |
+| 🧠 Análise de Texto (LLM local) | Resumo e sentimento de textos livres ou das notícias coletadas, via `POST /processar_texto` |
 | 🔌 Console da API | Documentação das rotas e testes de GET direto na interface |
 | 🤖 Preparação para LLMs | Corpus, estimativa de tokens e prompts-base dos casos de uso do TP4 |
 
@@ -110,6 +130,8 @@ lateral indica "API offline". Para usar outro endereço: `CONECTA_API_URL=http:/
 | GET | `/noticias` | Lista notícias (`ods`, `busca`) |
 | GET | `/estatisticas` | Contagens por causa, UF e ODS |
 | GET | `/llm/documentos` | Documentos de texto + metadados para LLMs |
+| POST | `/processar_texto` | **(TP4)** Resumo ou sentimento com LLM local (Response Model + erros 422/500/503/504) |
+| GET | `/llm/status` | **(TP4)** Modelos configurados e se já foram carregados |
 
 Detalhes, parâmetros e exemplos em `Docs/API/api_documentacao.md`.
 
@@ -131,12 +153,24 @@ curl -X POST http://localhost:8000/projetos -H "Content-Type: application/json" 
 - `gerar_nuvem_palavras.py` — nuvem de palavras e estatísticas de texto.
 - `preparar_corpus_llm.py` — gera `Data/Processed/corpus_llm.jsonl` (projetos + notícias).
 
-## 7. Preparação para LLMs (próxima etapa)
+## 7. LLM local (TP4)
+
+- **Modelos:** `recogna-nlp/ptt5-base-summ` (resumo, PT) e
+  `lxyuan/distilbert-base-multilingual-cased-sentiments-student` (sentimento), executados com
+  `transformers` em CPU, sem nuvem após o download. Justificativa (desempenho, custo local,
+  acessibilidade): `Docs/Project/escolha_modelo_llm.md`.
+- **Integração:** `Code/API/llm_service.py` (carga sob demanda, timeout, exceções de domínio) +
+  rota `POST /processar_texto` com Response Models em `schemas.py`.
+- **Erros:** 422 entrada inválida · 503 modelo indisponível · 504 tempo limite · 500 falha na
+  inferência, todos em JSON `{codigo, mensagem, dica}`.
+- **Testes:** `pytest tests -q` (pipelines simulados; não baixam modelos).
+
+### Preparação feita no TP3
 
 Casos de uso mapeados — resumo, classificação de sentimento, Q&A, geração de texto e
 classificação de projetos por ODS — com dados de entrada, saída esperada e prompts-base
 definidos em `Code/Modeling/prompts_llm.py`. Plano completo em
-`Docs/Project/preparacao_llm.md`. Nenhum LLM é chamado no TP3.
+`Docs/Project/preparacao_llm.md`. Resumo e sentimento foram implementados no TP4; Q&A, geração e classificação por ODS seguem planejados.
 
 ## 8. Testes manuais sugeridos (checklist)
 
@@ -148,13 +182,16 @@ definidos em `Code/Modeling/prompts_llm.py`. Plano completo em
 5. Em **Meus Dados**, cadastre um projeto e confirme que ele aparece em **Projetos Sociais**
    e que `Data/Processed/projetos_enviados.csv` foi criado.
 6. Em **Preparação para LLMs**, baixe o JSONL e confira os documentos.
+7. `POST /processar_texto` com `tarefa=sentimento` retorna 200 e `resultado.rotulo`; com `tarefa=resumo` e texto curto, 422; sem os modelos instalados/baixados, 503 com `dica`.
+8. Na página 🧠, processe um texto e confira `tempo_ms`; preencha a tabela de testes de `Docs/Project/escolha_modelo_llm.md` (seção 8).
 
 ## 9. Documentação
 
 - `Docs/Project/project_charter.md` — escopo, KPIs, riscos (revisado no TP3).
 - `Docs/DataReport/data_summary_report.md` — fontes, qualidade dos dados e decisão sobre Selenium.
 - `Docs/API/api_documentacao.md` — contrato da API.
-- `Docs/Project/preparacao_llm.md` — dados, casos de uso e decisões para o TP4.
+- `Docs/Project/preparacao_llm.md` — dados, casos de uso e decisões de LLM.
+- `Docs/Project/escolha_modelo_llm.md` — escolha dos modelos, integração local e tratamento de erros (TP4).
 - `Docs/Project/tdsp_crispdm_mapping.md` e `ambiente_dev_git_deploy.md` — método, ambiente, Git e deploy.
 
 ## 10. Créditos

@@ -28,6 +28,7 @@ navegacao = st.navigation(
             st.Page("app_pages/projetos.py", title="Projetos Sociais", icon="🗂️"),
             st.Page("app_pages/estatisticas.py", title="Estatísticas e Gráficos", icon="📊"),
             st.Page("app_pages/noticias.py", title="Notícias e Nuvem de Palavras", icon="📰"),
+            st.Page("app_pages/analise_texto.py", title="Análise de Texto (LLM local)", icon="🧠"),
         ],
         "Dados e integração": [
             st.Page("app_pages/meus_dados.py", title="Meus Dados (Upload/Download)", icon="📤"),
@@ -50,6 +51,6 @@ navegacao.run()
 
 st.divider()
 st.caption(
-    "Conecta Impacto · TP3 · Python, Streamlit (multipágina), FastAPI, Web Scraping e "
-    "preparação para LLMs, alinhado à Agenda 2030 da ONU."
+    "Conecta Impacto · TP4 · Python, Streamlit, FastAPI, Web Scraping e LLM local "
+    "(HuggingFace), alinhado à Agenda 2030 da ONU."
 )

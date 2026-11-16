@@ -1,4 +1,4 @@
-# Documentação da API — Conecta Impacto (TP3)
+# Documentação da API — Conecta Impacto (TP3 + TP4)
 
 API REST construída com **FastAPI** (`Code/API/main.py`). A documentação interativa
 (Swagger UI) é gerada automaticamente em `http://localhost:8000/docs`; este arquivo
@@ -26,6 +26,8 @@ Arquitetura: `main.py` (rotas) → `schemas.py` (validação/serialização com 
 | GET | `/noticias` | Lista notícias ESG/Agenda 2030 | 200 |
 | GET | `/estatisticas` | Contagens por causa, UF e ODS | 200 |
 | GET | `/llm/documentos` | Documentos de texto prontos para LLMs | 200, 422 |
+| **POST** | `/processar_texto` | **(TP4)** Resumo ou sentimento com LLM local | 200, 422, 500, 503, 504 |
+| GET | `/llm/status` | **(TP4)** Estado dos modelos locais | 200 |
 
 ## GET /projetos — consulta de dados
 
@@ -117,6 +119,33 @@ Projetos e notícias convertidos em documentos `{id, tipo, titulo, texto, metada
 tokens_estimados}`, com filtro opcional `tipo=projeto|noticia`. É a ponte para as tarefas
 de LLM do TP4 (ver `Docs/Project/preparacao_llm.md`).
 
+## POST /processar_texto — LLM local (TP4)
+
+**Função:** processar um texto em português com um modelo HuggingFace executado na
+máquina local, devolvendo um JSON estruturado (Response Model `ProcessarTextoOut`).
+
+| Campo do corpo | Obrigatório | Regras |
+|---|---|---|
+| `tarefa` | sim | `"resumo"` ou `"sentimento"` |
+| `texto` | sim | 1–20 000 caracteres; para `resumo`, mínimo 200 |
+| `max_palavras_resumo` | não | 15–200 (padrão 60); só vale para `resumo` |
+
+```bash
+curl -X POST http://localhost:8000/processar_texto -H "Content-Type: application/json" \
+  -d '{"tarefa":"sentimento","texto":"O projeto ampliou o acesso à educação e foi muito elogiado."}'
+```
+
+A resposta traz `tarefa`, `modelo`, `texto_entrada`, `n_caracteres_entrada`, `tempo_ms` e
+`resultado` (com `resumo`/`taxa_compressao` **ou** `rotulo`/`confianca`/`pontuacoes`).
+Erros seguem o formato `{"codigo","mensagem","dica"}`: **422** entrada inválida,
+**503** modelo indisponível, **504** tempo limite, **500** falha na inferência.
+Escolha do modelo, erros e exemplos completos: `Docs/Project/escolha_modelo_llm.md`.
+
+## GET /llm/status
+
+Mostra, para `resumo` e `sentimento`, o id do modelo configurado, se já foi carregado em
+memória e o último erro de carga (se houver). Útil para diagnosticar um 503.
+
 ## Como o app usa a API
 
 `app_utils.py` consulta `GET /saude`; se a API responder, todas as páginas usam os
@@ -127,5 +156,6 @@ arquivos via `repositorio.py` e exibe "API offline". Cadastros feitos pelo app u
 ## Limitações
 
 - Sem autenticação nem controle de taxa (uso acadêmico/local).
+- O LLM local atende **uma inferência por vez** (um único worker); requisições simultâneas ficam em fila.
 - Persistência em CSV (sem transações; gravações são serializadas por um *lock* dentro de
   um único processo).

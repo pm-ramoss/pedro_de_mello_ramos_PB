@@ -32,6 +32,8 @@ st.markdown(
     | GET | `/noticias` | Lista notícias (filtros `ods`, `busca`) |
     | GET | `/estatisticas` | Contagens por causa, UF e ODS |
     | GET | `/llm/documentos` | Documentos texto + metadados prontos para LLMs |
+    | GET | `/llm/status` | Modelos locais configurados e se já foram carregados |
+    | **POST** | `/processar_texto` | Resumo ou sentimento de um texto com LLM local (use a página 🧠) |
     """
 )
 
@@ -39,7 +41,7 @@ st.subheader("Testar um endpoint (GET)")
 c1, c2 = st.columns([1, 2])
 rota = c1.selectbox(
     "Rota",
-    ["/saude", "/projetos", "/noticias", "/estatisticas", "/llm/documentos"],
+    ["/saude", "/projetos", "/noticias", "/estatisticas", "/llm/documentos", "/llm/status"],
 )
 params: dict = {}
 if rota == "/projetos":

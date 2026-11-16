@@ -15,36 +15,52 @@ Documentação interativa gerada automaticamente:
 
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi.responses import JSONResponse
 
 import repositorio as repo
+from llm_service import ServicoLLMError, servico as servico_llm
 from schemas import (
     DocumentoLLM,
+    ErroResposta,
     Estatisticas,
     ListaProjetos,
     Noticia,
+    ProcessarTextoIn,
+    ProcessarTextoOut,
     ProjetoIn,
     ProjetoOut,
+    ResultadoResumo,
+    ResultadoSentimento,
+    StatusLLM,
 )
 
 TAGS = [
     {"name": "Projetos", "description": "Consulta e cadastro de projetos sociais."},
     {"name": "Notícias", "description": "Notícias sobre ESG / Agenda 2030 coletadas por scraping."},
     {"name": "Análises", "description": "Estatísticas agregadas e corpus preparado para LLMs."},
+    {"name": "LLM local", "description": "Resumo e análise de sentimento com modelos HuggingFace executados localmente."},
     {"name": "Sistema", "description": "Verificação de saúde da API."},
 ]
 
 app = FastAPI(
     title="Conecta Impacto — API",
-    version="0.3.0",
+    version="0.4.0",
     summary="Dados de projetos sociais e notícias ESG/Agenda 2030.",
     description=(
         "API do projeto **Conecta Impacto** (TP3). Permite consultar projetos sociais "
         "(`GET /projetos`), cadastrar novos (`POST /projetos`), listar notícias, obter "
-        "estatísticas e exportar documentos de texto para uso futuro com LLMs."
+        "estatísticas e processar textos com um LLM local (`POST /processar_texto`)."
     ),
     openapi_tags=TAGS,
 )
+
+
+@app.exception_handler(ServicoLLMError)
+async def tratar_erro_llm(_: Request, exc: ServicoLLMError) -> JSONResponse:
+    """Converte falhas do serviço de LLM em respostas JSON padronizadas (ErroResposta)."""
+    corpo = ErroResposta(codigo=exc.codigo, mensagem=str(exc), dica=exc.dica)
+    return JSONResponse(status_code=exc.codigo_http, content=corpo.model_dump())
 
 
 @app.get("/saude", tags=["Sistema"], summary="Verifica se a API está no ar")
@@ -137,3 +153,57 @@ def documentos_llm(
     """Projetos e notícias em formato texto + metadados + estimativa de tokens (insumo do TP4)."""
     docs = repo.montar_documentos_llm()
     return [d for d in docs if tipo is None or d["tipo"] == tipo]
+
+
+# --------------------------------------------------------------------------
+# LLM local (TP4)
+# --------------------------------------------------------------------------
+ERROS_LLM = {
+    422: {"model": ErroResposta, "description": "Texto vazio, curto ou longo demais para a tarefa"},
+    500: {"model": ErroResposta, "description": "Falha na inferência do modelo"},
+    503: {"model": ErroResposta, "description": "Modelo não instalado/baixado ou não carregou"},
+    504: {"model": ErroResposta, "description": "Inferência excedeu o tempo limite"},
+}
+
+
+@app.get("/llm/status", response_model=StatusLLM, tags=["LLM local"], summary="Estado dos modelos locais")
+def status_llm() -> dict:
+    """Mostra qual modelo está configurado para cada tarefa e se já foi carregado em memória."""
+    return servico_llm.status()
+
+
+@app.post(
+    "/processar_texto",
+    response_model=ProcessarTextoOut,
+    tags=["LLM local"],
+    summary="Resume um texto ou classifica seu sentimento com um modelo local",
+    responses=ERROS_LLM,
+)
+def processar_texto(requisicao: ProcessarTextoIn) -> dict:
+    """
+    Recebe um texto em português e executa a `tarefa` pedida com um modelo HuggingFace
+    **rodando na máquina local** (o primeiro uso carrega o modelo em memória, o que pode
+    levar alguns segundos).
+
+    - `tarefa="resumo"`: devolve um resumo (texto com pelo menos 200 caracteres).
+    - `tarefa="sentimento"`: devolve rótulo (positivo/neutro/negativo), confiança e pontuações.
+    """
+    bruto = servico_llm.processar(requisicao.tarefa, requisicao.texto, requisicao.max_palavras_resumo)
+    if requisicao.tarefa == "resumo":
+        n_resumo = len(bruto["resumo"].split())
+        n_texto = max(len(requisicao.texto.split()), 1)
+        resultado = ResultadoResumo(
+            resumo=bruto["resumo"], n_palavras_resumo=n_resumo, taxa_compressao=round(min(n_resumo / n_texto, 1.0), 3)
+        )
+    else:
+        resultado = ResultadoSentimento(
+            rotulo=bruto["rotulo"], confianca=bruto["confianca"], pontuacoes=bruto["pontuacoes"]
+        )
+    return {
+        "tarefa": requisicao.tarefa,
+        "modelo": bruto["modelo"],
+        "texto_entrada": requisicao.texto,
+        "n_caracteres_entrada": len(requisicao.texto),
+        "tempo_ms": bruto["tempo_ms"],
+        "resultado": resultado,
+    }

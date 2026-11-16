@@ -170,3 +170,16 @@ Data/Processed/projetos_enviados.csv                 (criado no primeiro POST; i
 Docs/API/api_documentacao.md                         (novo)
 Docs/Project/preparacao_llm.md                       (novo)
 ```
+
+## 7. LLM local no TP4
+
+```bash
+pip install -r requirements.txt            # inclui transformers e torch
+python Code/Modeling/baixar_modelos.py     # 1x, com internet (~2 GB)
+CONECTA_LLM_OFFLINE=1 uvicorn main:app --reload --app-dir Code/API --port 8000
+pytest tests -q                            # testes (não baixam modelos)
+```
+
+Git sugerido: `git commit -m "Modeling: LLM local (HuggingFace) integrado ao FastAPI com tratamento de erros"`.
+O Streamlit Community Cloud **não** comporta esses modelos (RAM/disco limitados); a demo do
+LLM deve ser feita localmente.
