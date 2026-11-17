@@ -73,7 +73,8 @@ Streamlit (página 🧠) ──HTTP──► FastAPI  POST /processar_texto
                                    │  valida entrada (Pydantic)
                                    ▼
                           Code/API/llm_service.py  (ServicoLLM)
-                                   │  carrega 1x, em memória, via transformers.pipeline
+                                   │  carrega 1x, em memória (sentimento: transformers.pipeline;
+                                   │  resumo: AutoTokenizer + AutoModelForSeq2SeqLM)
                                    ▼
                         modelo HuggingFace em disco local (cache)
 ```
@@ -82,7 +83,8 @@ Streamlit (página 🧠) ──HTTP──► FastAPI  POST /processar_texto
    instalar só a versão CPU do PyTorch, veja a seção "PyTorch" do README).
 2. **Download único:** `python Code/Modeling/baixar_modelos.py` (precisa de internet).
 3. **Execução sem nuvem:** `CONECTA_LLM_OFFLINE=1 uvicorn main:app --app-dir Code/API --port 8000`
-   — com essa variável, o `transformers` usa apenas arquivos locais (`local_files_only`).
+   — com essa variável, a API define `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` antes de importar
+   o `transformers`, que então usa apenas os arquivos já baixados.
 4. **Troca de modelo sem mexer no código:** `CONECTA_MODELO_RESUMO` e
    `CONECTA_MODELO_SENTIMENTO`.
 
@@ -129,7 +131,7 @@ global as converte em JSON padronizado `{codigo, mensagem, dica}` (modelo `ErroR
 |---|---|---|---|
 | Texto vazio, curto demais para resumir (< 200 caracteres) ou longo demais (> 20 000) | **422** | `entrada_invalida` | Revise o texto enviado |
 | Corpo inválido (tarefa desconhecida, campo ausente, texto só com espaços) | **422** | (formato padrão do FastAPI, com `loc` e `msg` por campo) | — |
-| `transformers`/PyTorch ausente, modelo não baixado ou sem memória para carregar | **503** | `modelo_indisponivel` | Instale as dependências e rode `baixar_modelos.py` |
+| `transformers`/PyTorch ausente, modelo não baixado ou sem memória para carregar | **503** | `modelo_indisponivel` | Depende da causa: dependência ausente → `pip install -r requirements.txt`; falha de carga → o erro original vem na `mensagem` e a `dica` aponta `baixar_modelos.py` e `GET /llm/status` |
 | Inferência acima de `CONECTA_LLM_TIMEOUT_S` (60 s) | **504** | `tempo_limite_excedido` | Envie um texto menor |
 | Modelo carregou, mas falhou ao processar (ex.: memória, saída vazia) | **500** | `falha_na_inferencia` | Consulte os logs |
 
@@ -163,7 +165,16 @@ Rode a API e a página 🧠 (ou `curl`) com as 5 notícias do corpus e anote:
 Anote também RAM usada e tempo da 1ª chamada. Essa tabela é a evidência de desempenho
 local que sustenta a justificativa deste documento.
 
-## 9. Segurança e privacidade
+## 9. Solução de problemas
+
+| Sintoma | Causa e solução |
+|---|---|
+| 503 com `got multiple values for keyword argument 'local_files_only'` | Bug da versão inicial do TP4: `local_files_only` era passado ao `pipeline()`, que já o repassa sozinho nas versões recentes do `transformers`. **Corrigido:** o modo offline agora usa `HF_HUB_OFFLINE`, e o resumo carrega o modelo com `AutoModelForSeq2SeqLM`. |
+| 503 `modelo_indisponivel` após o download | Veja o texto da `mensagem` (traz o erro original) e `GET /llm/status` (campo `ultimo_erro`). Causas comuns: `sentencepiece` ausente (modelo de resumo), pouca RAM, versão incompatível do `transformers`. |
+| 503 no resumo com `Error parsing line b'\x0e' ... spiece.model` e, no terminal, `Detected incompatible Protobuf Gencode/Runtime versions` | O `sentencepiece` instalado foi gerado com um `protobuf` mais novo que o instalado; o `transformers` não consegue ler o `spiece.model` e cai no extrator TikToken, que falha. **Solução:** `pip install -U protobuf sentencepiece` e reiniciar a API. Como reforço, o código tenta o tokenizador "lento" (`use_fast=False`) antes de desistir. |
+| Primeira chamada lenta | Normal: o modelo é carregado em memória. As seguintes são mais rápidas. |
+
+## 10. Segurança e privacidade
 
 - Execução local: os textos **não são enviados** a terceiros (após o download inicial).
 - Os modelos vêm do HuggingFace Hub; cada um tem sua licença — consulte o *model card*

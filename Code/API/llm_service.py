@@ -11,7 +11,7 @@ expõe duas tarefas de PLN usadas pela API:
 Os modelos podem ser trocados por variáveis de ambiente, sem alterar código:
   CONECTA_MODELO_RESUMO      (padrão: recogna-nlp/ptt5-base-summ)
   CONECTA_MODELO_SENTIMENTO  (padrão: lxyuan/distilbert-base-multilingual-cased-sentiments-student)
-  CONECTA_LLM_OFFLINE=1      usa somente arquivos já baixados (local_files_only)
+  CONECTA_LLM_OFFLINE=1      usa somente arquivos já baixados (HF_HUB_OFFLINE)
   CONECTA_LLM_TIMEOUT_S      tempo máximo por inferência (padrão: 60)
 
 Erros são traduzidos em exceções de domínio (ver abaixo), que a API converte em
@@ -21,11 +21,20 @@ códigos HTTP adequados (422, 503, 504, 500).
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any, Callable
+
+# Modo offline: as bibliotecas da HuggingFace leem estas variáveis ao serem importadas,
+# por isso são definidas aqui, antes de qualquer `import transformers`. (Passar
+# `local_files_only` manualmente ao pipeline causa "multiple values for keyword
+# argument" nas versões recentes do transformers.)
+if os.environ.get("CONECTA_LLM_OFFLINE") == "1":
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 MODELO_RESUMO_PADRAO = "recogna-nlp/ptt5-base-summ"
 MODELO_SENTIMENTO_PADRAO = "lxyuan/distilbert-base-multilingual-cased-sentiments-student"
@@ -50,6 +59,11 @@ class ServicoLLMError(Exception):
     codigo_http = 500
     codigo = "erro_interno"
     dica = "Consulte os logs do servidor."
+
+    def __init__(self, mensagem: str = "", dica: str | None = None) -> None:
+        super().__init__(mensagem)
+        if dica:
+            self.dica = dica
 
 
 class EntradaInvalidaError(ServicoLLMError):
@@ -82,27 +96,76 @@ class InferenciaError(ServicoLLMError):
 # --------------------------------------------------------------------------
 # Criação do pipeline (isolada para poder ser substituída em testes)
 # --------------------------------------------------------------------------
-def criar_pipeline_hf(tarefa: str, modelo: str) -> Callable[..., Any]:
-    """Cria um pipeline `transformers` executado localmente."""
+DICA_DEPENDENCIAS = "Instale as dependências: pip install -r requirements.txt (transformers, torch, sentencepiece)."
+DICA_CARGA = (
+    "Confira o detalhe do erro acima. Se o modelo ainda não foi baixado, rode "
+    "'python Code/Modeling/baixar_modelos.py'; se mudou de versão do transformers, "
+    "veja 'GET /llm/status' e os logs do servidor."
+)
+
+
+DICA_TOKENIZADOR = (
+    "Incompatibilidade entre sentencepiece e protobuf. Rode: pip install -U protobuf sentencepiece "
+    "e reinicie a API."
+)
+
+
+def _criar_resumidor(modelo: str) -> Callable[..., Any]:
+    """Resumidor baseado em AutoTokenizer + AutoModelForSeq2SeqLM.
+
+    Não usa `pipeline("summarization")`, que mudou/foi removido em versões recentes do
+    transformers; assim o código independe dessa API.
+    """
+    import torch
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
     try:
-        from transformers import pipeline
+        tokenizador = AutoTokenizer.from_pretrained(modelo)
+    except Exception as exc_rapido:  # noqa: BLE001
+        # Contorno: o tokenizador "lento" lê o spiece.model direto com a biblioteca sentencepiece,
+        # sem a conversão que depende de protobuf compatível (causa comum de falha no Windows).
+        try:
+            tokenizador = AutoTokenizer.from_pretrained(modelo, use_fast=False)
+        except Exception:  # noqa: BLE001
+            raise exc_rapido from None
+    rede = AutoModelForSeq2SeqLM.from_pretrained(modelo)
+    rede.eval()
+
+    def resumir(texto: str, max_length: int = 96, min_length: int = 10, num_beams: int = 4,
+                no_repeat_ngram_size: int = 3, **_ignorados: Any) -> list[dict]:
+        entradas = tokenizador(texto, return_tensors="pt", truncation=True, max_length=512)
+        with torch.no_grad():
+            ids = rede.generate(
+                **entradas, max_length=max_length, min_length=min_length, num_beams=num_beams,
+                no_repeat_ngram_size=no_repeat_ngram_size, early_stopping=True,
+            )
+        return [{"summary_text": tokenizador.decode(ids[0], skip_special_tokens=True)}]
+
+    return resumir
+
+
+def criar_pipeline_hf(tarefa: str, modelo: str) -> Callable[..., Any]:
+    """Carrega o modelo HuggingFace localmente (cache em disco; sem nuvem após o download)."""
+    try:
+        import transformers  # noqa: F401
+        import torch  # noqa: F401
     except ImportError as exc:
         raise ModeloIndisponivelError(
-            "A biblioteca 'transformers' (e o PyTorch) não está instalada neste ambiente."
+            f"Biblioteca ausente: {exc}. O transformers e o PyTorch precisam estar instalados.",
+            dica=DICA_DEPENDENCIAS,
         ) from exc
 
-    offline = os.environ.get("CONECTA_LLM_OFFLINE") == "1"
-    kwargs: dict[str, Any] = {"model": modelo, "model_kwargs": {"local_files_only": offline}}
-    if tarefa == "resumo":
-        kwargs["task"] = "summarization"
-    else:
-        kwargs["task"] = "text-classification"
-        kwargs["top_k"] = None  # devolve a pontuação de todos os rótulos
     try:
-        return pipeline(**kwargs)
-    except Exception as exc:  # noqa: BLE001 — rede, disco, modelo inexistente, memória...
+        if tarefa == "resumo":
+            return _criar_resumidor(modelo)
+        from transformers import pipeline
+
+        return pipeline(task="text-classification", model=modelo, top_k=None)
+    except Exception as exc:  # noqa: BLE001 — arquivo ausente, memória, versão incompatível...
+        problema_tokenizador = re.search(r"protobuf|sentencepiece|spiece|tiktoken", str(exc), re.IGNORECASE)
         raise ModeloIndisponivelError(
-            f"Não foi possível carregar o modelo '{modelo}': {type(exc).__name__}: {exc}"
+            f"Não foi possível carregar o modelo '{modelo}': {type(exc).__name__}: {exc}",
+            dica=DICA_TOKENIZADOR if problema_tokenizador else DICA_CARGA,
         ) from exc
 
 
